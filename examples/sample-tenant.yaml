@@ -1,0 +1,24 @@
+# Example tenant definition. Copy into your MCP server's repo (e.g. platform/tenant.yaml), adapt, and ask the
+# platform team to register it in terraform/environments/<env>/terraform.tfvars. Contract: docs/onboarding.md
+apiVersion: platform.mcp.lab/v1alpha1
+kind: McpTenant
+name: sample                     # must equal the key used in `tenants`
+namespace: mcp-sample            # dedicated namespace (created + secured by the platform), or "mcp-servers" (shared)
+gateway:
+  paths: [/sample/mcp]           # path prefixes on the shared gateway; must not overlap other tenants'
+idp:
+  resourceScopes:                # carries your server's audience; clients get it by asking for the scope
+  - name: sample:api
+    audience: http://localhost:8000/sample/mcp
+    consentText: Use the sample server as you
+  consentScopes: []              # extra consent scopes for sensitive tools (step-up)
+  testClient:                    # attach your scopes to the platform's shared test client
+    defaultScopes: [sample:api]
+  clients:                       # confidential clients your server needs (web | service-account)
+  - clientId: sample-web
+    type: web
+    redirectUris: [http://localhost:8000/sample/callback]
+    secretKey: WEB_CLIENT_SECRET
+  secret:                        # Secret written into your namespace
+    name: sample-secrets
+    generated: [SIGNING_KEY]

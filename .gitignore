@@ -1,0 +1,17 @@
+# Terraform state holds generated secrets (Keycloak admin, test user, Postgres passwords): never commit it.
+*.tfstate
+*.tfstate.*
+state-archive/
+crash.log
+.terraform/
+# Rendered manifests (the realm import embeds the test user's password).
+**/.generated/
+# Local overrides and secrets.
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.env
+# OS
+.DS_Store

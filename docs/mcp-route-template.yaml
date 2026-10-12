@@ -1,0 +1,77 @@
+# Template for exposing an MCP server through the shared gateway. Copy into the MCP server's own repo and replace
+# `my-mcp` / ports / URLs. Proven by ecommerce-mcp-server (deploy/k8s/gateway-route.yaml, gateway-policy.yaml).
+#
+# Works with the platform's mcp-servers baseline (STRICT mTLS, only the gateway's identity may call):
+#  - Select the backend Service by LABEL. The gateway then connects with its mesh identity over mTLS.
+#    A `static` host is sent in plaintext and is reset by the sidecar under STRICT mTLS.
+#  - Validate JWTs at the edge in Permissive mode with preserveToken: an expired token (the everyday case) must reach
+#    the server so it can answer with the OAuth challenge clients need to refresh. The server validates too.
+#  - Stamp the client address and strip client-supplied trust headers; the gateway forwards no client address itself.
+#   issuer   = terraform output keycloak_issuer      (http://localhost:8080/realms/mcp)
+#   audience = the server's resource URL             (http://localhost:8000/mcp)
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-mcp
+  namespace: mcp-servers
+  labels: { mcp.agentgateway.dev/expose: "my-mcp" }
+spec:
+  selector: { app: my-mcp }
+  ports: [{ name: http, port: 80, targetPort: 3000, appProtocol: kgateway.dev/mcp }] # kgateway.dev/mcp = streamable HTTP at /mcp
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata: { name: my-mcp-backend, namespace: mcp-servers }
+spec:
+  mcp:
+    prefixMode: Never
+    targets:
+    - name: my-mcp
+      selector:
+        namespaces: { matchLabels: { kubernetes.io/metadata.name: mcp-servers } }
+        services: { matchLabels: { mcp.agentgateway.dev/expose: "my-mcp" } }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: { name: my-mcp, namespace: mcp-servers }
+spec:
+  parentRefs:
+  - { name: agentgateway-proxy, namespace: agentgateway-system }
+  rules:
+  - matches: [{ path: { type: PathPrefix, value: /mcp } }]
+    backendRefs:
+    - { group: agentgateway.dev, kind: AgentgatewayBackend, name: my-mcp-backend }
+  # Discovery document (and any plain-HTTP pages) served by the server itself; plain Service backends also use mTLS.
+  - matches: [{ path: { type: PathPrefix, value: /.well-known/oauth-protected-resource } }]
+    backendRefs:
+    - { name: my-mcp, port: 80 }
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata: { name: my-mcp-edge, namespace: mcp-servers }
+spec:
+  targetRefs:
+  - { group: gateway.networking.k8s.io, kind: HTTPRoute, name: my-mcp }
+  traffic:
+    jwtAuthentication:
+      mode: Permissive
+      preserveToken: true
+      providers:
+      - issuer: http://localhost:8080/realms/mcp
+        audiences: ["http://localhost:8000/mcp"]
+        jwks:
+          remote:
+            url: http://keycloak-service.keycloak.svc.cluster.local:8080/realms/mcp/protocol/openid-connect/certs
+    rateLimit:
+      local:
+      - { requests: 300, unit: Minutes, burst: 60, key: "source.address" }
+    transformation:
+      request:
+        remove: [x-mcp-session-id]          # plus any header your server trusts from the gateway
+        set:
+        - { name: x-forwarded-for, value: "source.address" }
+    # Optional: external decision service (e.g. a session-manager), reachable only by the gateway's identity.
+    # extAuth:
+    #   backendRef: { name: my-session-manager, port: 80 }
+    #   failureMode: FailOpen
+    #   http: { path: "'/check'", allowedRequestHeaders: [authorization, user-agent, x-forwarded-for], allowedResponseHeaders: [x-trust-tier] }
