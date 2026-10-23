@@ -9,9 +9,21 @@ variable "operator_version" {
 }
 
 variable "public_url" {
-  description = "Externally visible Keycloak base URL; becomes the issuer host in tokens."
+  description = "Externally visible Keycloak base URL (the shared gateway); becomes the issuer host in tokens."
+  type        = string
+  default     = "http://localhost:8000"
+}
+
+variable "admin_url" {
+  description = "Admin console URL. Not published on the gateway; reached with a port-forward only."
   type        = string
   default     = "http://localhost:8080"
+}
+
+variable "trusted_proxy_cidrs" {
+  description = "Addresses whose X-Forwarded-* headers Keycloak believes (the gateway pods). Pod CIDR of the local cluster."
+  type        = list(string)
+  default     = ["10.42.0.0/16"]
 }
 
 variable "realm_name" {
@@ -209,12 +221,24 @@ locals {
       http = {
         httpEnabled = true
       }
-      # Fixed public URL so the token `iss` claim is stable (clients reach Keycloak via
-      # `kubectl port-forward svc/keycloak-service 8080`). The gateway fetches JWKS in-cluster.
+      # Fixed public URL so the token `iss` claim is stable: clients reach login, registration and token endpoints
+      # through the shared gateway (modules/auth-route), on the same origin as the MCP servers. Some clients only
+      # allow private-network OAuth fetches to the MCP server's own origin (OpenClaw), and one front door is the
+      # production shape anyway. The admin console has its own URL and is not routed by the gateway.
+      # In-cluster callers (JWKS, token exchange, admin API) use keycloak-service directly; `iss` stays the public URL.
       hostname = {
         hostname = var.public_url
+        admin    = var.admin_url
         strict   = false
       }
+      # Client address for brute-force protection, events and DCR trusted-hosts checks comes from the gateway's
+      # X-Forwarded-For (the gateway overwrites whatever the client sent); believed only from pod addresses.
+      proxy = {
+        headers = "xforwarded"
+      }
+      additionalOptions = [
+        { name = "proxy-trusted-addresses", value = join(",", var.trusted_proxy_cidrs) },
+      ]
       bootstrapAdmin = {
         user = {
           secret = kubernetes_secret.keycloak_admin.metadata[0].name
@@ -229,9 +253,10 @@ resource "local_file" "keycloak_cr" {
   content  = local.keycloak_cr_yaml
 }
 
+# Re-applies whenever the rendered CR content changes. No destroy step here: a content change replaces this
+# resource, and deleting the CR on every change would take Keycloak down. Deletion lives in keycloak_cr_lifecycle.
 resource "null_resource" "apply_keycloak_cr" {
   triggers = {
-    # Re-applies whenever the rendered CR content changes.
     content_hash = sha256(local.keycloak_cr_yaml)
   }
 
@@ -239,16 +264,26 @@ resource "null_resource" "apply_keycloak_cr" {
     command = "kubectl apply -f ${local_file.keycloak_cr.filename}"
   }
 
-  provisioner "local-exec" {
-    when    = destroy
-    command = "kubectl delete -f ${path.module}/.generated/keycloak-cr.yaml --ignore-not-found=true"
-  }
-
   depends_on = [
     local_file.keycloak_cr,
     null_resource.keycloak_operator,
     kubernetes_stateful_set.postgres,
   ]
+}
+
+# Deletes the Keycloak CR only on a real destroy (triggers never change).
+resource "null_resource" "keycloak_cr_lifecycle" {
+  triggers = {
+    name      = "keycloak"
+    namespace = var.namespace
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "kubectl delete keycloak/${self.triggers.name} -n ${self.triggers.namespace} --ignore-not-found=true"
+  }
+
+  depends_on = [null_resource.apply_keycloak_cr]
 }
 
 # --- Realm for the MCP ecosystem (imported once by the operator) ---

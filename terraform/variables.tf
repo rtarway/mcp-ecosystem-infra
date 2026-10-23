@@ -63,9 +63,9 @@ variable "keycloak_admin_password" {
 }
 
 variable "keycloak_public_url" {
-  description = "Keycloak URL as seen by clients (port-forward); determines the token issuer."
+  description = "Keycloak URL as seen by clients: the shared gateway (modules/auth-route). Determines the token issuer."
   type        = string
-  default     = "http://localhost:8080"
+  default     = "http://localhost:8000"
 }
 
 variable "tenants" {

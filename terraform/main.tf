@@ -36,6 +36,14 @@ module "agentgateway" {
   depends_on = [module.namespaces, module.istio]
 }
 
+# Publishes the realm's login, registration and token endpoints on the shared gateway (same origin as MCP servers).
+module "auth_route" {
+  source     = "./modules/auth-route"
+  realm_name = "mcp"
+
+  depends_on = [module.keycloak, module.agentgateway]
+}
+
 # Namespace security for MCP servers: default-deny, STRICT mTLS, only the gateway's identity may call.
 module "mcp_servers_baseline" {
   source            = "./modules/mcp-servers-baseline"
@@ -131,8 +139,9 @@ output "next_steps" {
     Retrieve the Keycloak admin password:
       terraform output -raw keycloak_admin_password
 
-    Port-forward Keycloak to reach the admin console:
-      kubectl port-forward -n keycloak svc/keycloak-service 8080:8080
+    Sign-in endpoints are on the gateway: ${module.keycloak.issuer}
+    The admin console is not published; port-forward it:
+      kubectl port-forward -n keycloak svc/keycloak-service 8080:8080   # http://localhost:8080/admin
 
     See docs/phase-plan.md for what's next (SPIRE<->Istio CA federation, Keycloak
     realm/client/OAuth2.1 config, agentgateway MCP routing + auth policy, MCP servers).

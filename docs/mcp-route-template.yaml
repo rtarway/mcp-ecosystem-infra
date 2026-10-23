@@ -7,7 +7,7 @@
 #  - Validate JWTs at the edge in Permissive mode with preserveToken: an expired token (the everyday case) must reach
 #    the server so it can answer with the OAuth challenge clients need to refresh. The server validates too.
 #  - Stamp the client address and strip client-supplied trust headers; the gateway forwards no client address itself.
-#   issuer   = terraform output keycloak_issuer      (http://localhost:8080/realms/mcp)
+#   issuer   = terraform output keycloak_issuer      (http://localhost:8000/realms/mcp)
 #   audience = the server's resource URL             (http://localhost:8000/mcp)
 apiVersion: v1
 kind: Service
@@ -57,7 +57,7 @@ spec:
       mode: Permissive
       preserveToken: true
       providers:
-      - issuer: http://localhost:8080/realms/mcp
+      - issuer: http://localhost:8000/realms/mcp
         audiences: ["http://localhost:8000/mcp"]
         jwks:
           remote:

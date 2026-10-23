@@ -15,15 +15,15 @@ Onboarded today: `ecommerce` (repo `ecommerce-mcp-server`, shared namespace `mcp
 ## Architecture
 
 ```
-   MCP clients (agents, MCP Inspector, …)            customer's browser (login, consent)
-                  │                                              │
-                  ▼  localhost:8000                              ▼  localhost:8080 (port-forward)
-   ┌──────────────────────────────────────┐          ┌────────────────────────────────┐
-   │ agentgateway (ns agentgateway-system)│          │ Keycloak (ns keycloak), realm  │
-   │ shared Gateway · MCP-aware routing   │          │ `mcp` + security baseline +    │
-   │ own SPIFFE identity (istiod)         │          │ per-tenant scopes and clients  │
-   └──────────────────┬───────────────────┘          └────────────────────────────────┘
-                      │ mTLS (gateway identity)
+   MCP clients (agents, MCP Inspector, …) and the customer's browser (login, consent)
+                  │
+                  ▼  localhost:8000 (one origin: MCP servers and sign-in)
+   ┌──────────────────────────────────────┐ /realms/mcp ┌────────────────────────────────┐
+   │ agentgateway (ns agentgateway-system)│────────────▶│ Keycloak (ns keycloak), realm  │
+   │ shared Gateway · MCP-aware routing   │ (auth-route)│ `mcp` + security baseline +    │
+   │ own SPIFFE identity (istiod)         │             │ per-tenant scopes and clients  │
+   └──────────────────┬───────────────────┘             │ admin: port-forward :8080 only │
+                      │ mTLS (gateway identity)          └────────────────────────────────┘
    ┌──────────────────┴──────────────────────────────────────────────────────────────┐
    │ Istio mesh, trust domain cluster.local                                          │
    │  ns mcp-servers (shared)          ns <tenant> (dedicated, optional)            │

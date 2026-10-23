@@ -5,7 +5,7 @@
 #   - offline (long-lived) refresh tokens: hard max + idle limit; offline_access not a realm default
 #   - login/refresh/registration events on (theft detectors read REFRESH_TOKEN_ERROR "reuse" events)
 #   - client policy: every public client must use PKCE S256; no implicit or password grants; consent required
-#   - dynamic client registration (RFC 7591) for LOCAL clients only (lab): trusted hosts, browser origins
+#   - dynamic client registration (RFC 7591) for LOCAL clients only (lab): loopback redirect URIs, browser origins
 #     (MCP Inspector), base allowed scopes, `mcp-groups` claim
 #   - optional: prune dynamically registered clients (PRUNE_DCR_CLIENTS=true)
 # Usage: KC_ADMIN_PASSWORD=... [KC_URL=http://localhost:8080] [REALM=mcp] realm-baseline.sh
@@ -89,11 +89,23 @@ merge_policy() {
 # github.com: MCP Inspector registers with client_uri=https://github.com/modelcontextprotocol/inspector and Keycloak
 # requires every registered URL to match a trusted host. Lab trade-off; production disables anonymous DCR.
 merge_policy trusted-hosts trusted-hosts localhost 127.0.0.1 github.com
+# The sender-address half of the policy is off: registration arrives through the shared gateway (modules/auth-route),
+# and behind a load balancer the address is the balancer's (Rancher's ServiceLB rewrites it), never the client's.
+# The half that matters stays on: every registered redirect/client URI must be on a trusted host (loopback here).
+set_policy() {
+  local provider=$1 key=$2 value=$3
+  local comp; comp=$(api GET "/components?type=org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy" \
+    | json "print(json.dumps(next(x for x in d if x['subType']=='anonymous' and x['providerId']=='$provider')))")
+  local id; id=$(json "print(d['id'])" <<<"$comp")
+  api PUT "/components/$id" -d "$(json "d.setdefault('config',{})['$key']=['$value'];print(json.dumps(d))" <<<"$comp")" >/dev/null
+}
+set_policy trusted-hosts host-sending-registration-request-must-match false
+set_policy trusted-hosts client-uris-must-match true
 merge_policy registration-web-origins web-origins http://localhost:6274 http://127.0.0.1:6274 http://localhost:6277 http://127.0.0.1:6277
 # offline_access may be NAMED at registration (clients do so because Keycloak advertises it). It is then granted,
 # bounded by the offline lifetimes above. Refusing it breaks MCP Inspector's registration (HTTP 403).
 merge_policy allowed-client-templates allowed-client-scopes openid offline_access
-log "DCR: localhost + github.com trusted, Inspector origins allowed, base scopes openid/offline_access"
+log "DCR: redirect URIs on localhost/github.com only (sender address not checked), Inspector origins allowed, base scopes openid/offline_access"
 
 if [ "${PRUNE_DCR_CLIENTS:-false}" = "true" ]; then
   N=0

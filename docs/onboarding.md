@@ -13,7 +13,7 @@ components.
 | Istio mesh (trust domain `cluster.local`) | A SPIFFE identity per service account (`spiffe://cluster.local/ns/<ns>/sa/<sa>`); STRICT mTLS in your namespace | Configure mTLS or certificates |
 | Network isolation | Default-deny ingress; only the gateway can reach your pods (NetworkPolicy + mesh AuthorizationPolicy on the gateway's identity) | Write the baseline policies |
 | agentgateway on `localhost:8000` | A shared Gateway with its own mesh identity, so it reaches your pods over mTLS | Run or configure the gateway itself |
-| Keycloak realm `mcp` (issuer `http://localhost:8080/realms/mcp`) | Your scopes and clients, created from your tenant file; their secrets written into your namespace | Use the Keycloak admin account |
+| Keycloak realm `mcp` (issuer `http://localhost:8000/realms/mcp`: sign-in is published on the shared gateway, same origin as your MCP endpoint) | Your scopes and clients, created from your tenant file; their secrets written into your namespace | Use the Keycloak admin account |
 | Realm security baseline | Brute-force protection, password policy, PKCE for every public client, consent, offline-token limits, login/refresh events, dynamic client registration for local MCP clients (e.g. MCP Inspector) | Harden the realm |
 | SPIRE | Installed; becomes the mesh CA in a later phase | — |
 
@@ -121,4 +121,7 @@ caller's pods). Both are additive to the baseline.
 - `manage-users` is realm-wide (it can end any user's sessions). Production should scope it per tenant (Keycloak
   fine-grained admin permissions) or run the theft response as a platform service.
 - Dedicated namespaces are PSA `privileged` (Istio sidecar init) until Istio CNI is installed.
-- HTTP everywhere except gateway↔workload (mTLS); Keycloak is reached through a port-forward on `:8080`.
+- HTTP everywhere except gateway↔workload (mTLS). Sign-in is on the gateway (`/realms/mcp`, module `auth-route`); the
+  Keycloak admin console is not published and is reached through a port-forward on `:8080`.
+- Keep your MCP endpoint on the gateway's origin: some clients only fetch OAuth endpoints on the MCP server's own
+  origin when it is a private address (OpenClaw), which is why sign-in lives there too.
