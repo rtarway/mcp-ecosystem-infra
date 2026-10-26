@@ -107,6 +107,24 @@ merge_policy registration-web-origins web-origins http://localhost:6274 http://1
 merge_policy allowed-client-templates allowed-client-scopes openid offline_access
 log "DCR: redirect URIs on localhost/github.com only (sender address not checked), Inspector origins allowed, base scopes openid/offline_access"
 
+# --- advertise only what anonymous registration accepts ---
+# Some clients (Codex) register asking for every scope in the authorization server's metadata; a scope the
+# registration policy refuses (service_account, microprofile-jwt, ...) then fails the whole registration. Hide every
+# scope that is neither an allowed client scope nor a realm default from the metadata. Scopes stay usable by
+# clients configured for them; tenant scopes added later are allow-listed by onboarding and stay advertised.
+ALLOWED=$(api GET "/components?type=org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy" \
+  | json "print(' '.join(next(x for x in d if x['subType']=='anonymous' and x['providerId']=='allowed-client-templates')['config'].get('allowed-client-scopes',[])))")
+DEFAULTS=$(api GET "/default-default-client-scopes" | json "print(' '.join(c['name'] for c in d))")
+HIDDEN=""
+for row in $(api GET "/client-scopes" | json "[print(c['id']+'|'+c['name']) for c in d if c.get('protocol')=='openid-connect']"); do
+  id=${row%%|*}; name=${row#*|}
+  case " $ALLOWED $DEFAULTS " in *" $name "*) continue ;; esac
+  rep=$(api GET "/client-scopes/$id" | json "d.setdefault('attributes',{})['include.in.openid.provider.metadata']='false';print(json.dumps(d))")
+  api PUT "/client-scopes/$id" -d "$rep" >/dev/null
+  HIDDEN="$HIDDEN $name"
+done
+log "metadata: hidden scopes registration would refuse:${HIDDEN:- none}"
+
 if [ "${PRUNE_DCR_CLIENTS:-false}" = "true" ]; then
   N=0
   for id in $(api GET "/clients" | json "
