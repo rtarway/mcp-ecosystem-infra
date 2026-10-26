@@ -31,6 +31,19 @@ in.
 | Public clients | PKCE S256, consent required, no implicit or password grant (client policy) |
 | Max clients | Keycloak's cap; expired clients are removed by the expiry job (`modules/client-expiry`) |
 
+## Token and sign-in lifetimes (S9, reviewed 2026-10-26)
+
+| What | Lifetime | Effect for a customer's agent |
+|---|---|---|
+| Access token | 5 minutes | refreshed silently |
+| Refresh token (normal) | dies with the Keycloak sign-in session: 30 minutes idle, 10 hours at most | an agent without an offline token signs in again after that (OpenClaw today: it does not ask for `offline_access`) |
+| Offline token (`offline_access`, allowed for self-registered clients) | 7 days unused, 30 days at most | resumes the next day without a sign-in (Codex and Claude Code ask for it) |
+| Refresh tokens | single use (rotation, no reuse); a reused one ends all of the customer's sessions (theft response) | clients must not refresh in parallel with one token |
+| Self-registered client, consent | 30 days (`modules/client-expiry`) | the agent registers, signs in and consents again |
+
+The 7-day idle limit stays for now (decision Q2 of the ecommerce plan): a customer who shops less than weekly signs
+in again.
+
 ## Findings from the S7 investigations (2026-10-26)
 
 **A registered client cannot later ask for a scope it did not name at registration.** When the registration request
