@@ -80,6 +80,8 @@ terraform/
                           #  scripts/realm-baseline.sh: realm security baseline (applied on every change)
     agentgateway/         # agentgateway CRDs + control plane + shared Gateway :8000 with its own
                           #  SPIFFE identity from istiod (AgentgatewayParameters.istio)
+    auth-route/           # publishes realm `mcp` sign-in on the shared gateway (same origin as MCP servers)
+    client-expiry/        # daily job: self-registered clients and consents expire after 30 days
     mcp-servers-baseline/ # security baseline for an MCP namespace (shared mcp-servers + every dedicated one)
     mcp-tenant/           # onboards one team from its tenant.yaml (namespace, IdP objects, secrets)
                           #  scripts/onboard_idp.py: validated, ownership-tagged, serialised
@@ -88,6 +90,8 @@ examples/
   environments/local/terraform.tfvars
 docs/
   phase-plan.md           # what's built now vs. what's next
+  onboarding.md           # the platform's contract for MCP server teams
+  client-registration.md  # how MCP clients register and sign in; scope, lifetime and expiry rules
 ```
 
 ## Running it
