@@ -68,6 +68,12 @@ variable "keycloak_public_url" {
   default     = "http://localhost:8000"
 }
 
+variable "client_expiry_days" {
+  description = "Self-registered MCP clients and customers' consents are removed after this many days (the agent starts over)."
+  type        = number
+  default     = 30
+}
+
 variable "tenants" {
   description = <<-EOT
     MCP server teams onboarded onto the platform: name => path to that team's tenant.yaml (in its own repo).

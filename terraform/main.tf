@@ -44,6 +44,15 @@ module "auth_route" {
   depends_on = [module.keycloak, module.agentgateway]
 }
 
+# One 30-day clock for linked MCP clients: self-registered clients and consents expire (Keycloak has neither).
+module "client_expiry" {
+  source                  = "./modules/client-expiry"
+  keycloak_admin_password = module.keycloak.admin_password
+  max_age_days            = var.client_expiry_days
+
+  depends_on = [module.keycloak]
+}
+
 # Namespace security for MCP servers: default-deny, STRICT mTLS, only the gateway's identity may call.
 module "mcp_servers_baseline" {
   source            = "./modules/mcp-servers-baseline"

@@ -15,6 +15,7 @@ components.
 | agentgateway on `localhost:8000` | A shared Gateway with its own mesh identity, so it reaches your pods over mTLS | Run or configure the gateway itself |
 | Keycloak realm `mcp` (issuer `http://localhost:8000/realms/mcp`: sign-in is published on the shared gateway, same origin as your MCP endpoint) | Your scopes and clients, created from your tenant file; their secrets written into your namespace | Use the Keycloak admin account |
 | Realm security baseline | Brute-force protection, password policy, PKCE for every public client, consent, offline-token limits, login/refresh events, dynamic client registration for local MCP clients (e.g. MCP Inspector) | Harden the realm |
+| Client and consent expiry (`modules/client-expiry`) | Every self-registered MCP client and every customer consent ends after 30 days (`client_expiry_days`): the customer's agent registers, signs in and consents again. A daily CronJob in `keycloak`; your own clients (tenant-owned) are never touched | Clean up clients yourself |
 | SPIRE | Installed; becomes the mesh CA in a later phase | — |
 
 All MCP servers share one cluster and one trust domain.
