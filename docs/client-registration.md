@@ -36,7 +36,7 @@ in.
 | What | Lifetime | Effect for a customer's agent |
 |---|---|---|
 | Access token | 5 minutes | refreshed silently |
-| Refresh token (normal) | dies with the Keycloak sign-in session: 30 minutes idle, 10 hours at most | an agent without an offline token signs in again after that (OpenClaw today: it does not ask for `offline_access`) |
+| Refresh token (normal) | dies with the Keycloak sign-in session: 30 minutes idle, 10 hours at most | an agent without an offline token signs in again after that (seen with OpenClaw, configured without `offline_access`; it requests exactly the configured scope) |
 | Offline token (`offline_access`, allowed for self-registered clients) | 7 days unused, 30 days at most | resumes the next day without a sign-in (Codex and Claude Code ask for it) |
 | Refresh tokens | single use (rotation, no reuse); a reused one ends all of the customer's sessions (theft response) | clients must not refresh in parallel with one token |
 | Self-registered client, consent | 30 days (`modules/client-expiry`) | the agent registers, signs in and consents again |
